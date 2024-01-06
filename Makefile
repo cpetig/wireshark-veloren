@@ -10,4 +10,4 @@ veloren_ds.so: plugin.c veloren.c
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@ $(LIBS)
 
 install: veloren_ds.so
-	cp $^ $(HOME)/.local/lib/wireshark/plugins/4.0/codecs
+	cp $^ $(HOME)/.local/lib/wireshark/plugins/4.0/epan
