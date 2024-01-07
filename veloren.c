@@ -11,6 +11,16 @@ static int hf_vlr_hs_magic=-1;
 static int hf_vlr_hs_vers=-1;
 static int hf_vlr_in_pid=-1;
 static int hf_vlr_in_secret=-1;
+static int hf_vlr_op_pri=-1;
+static int hf_vlr_op_prom=-1;
+static int hf_vlr_op_sid=-1;
+static int hf_vlr_op_bandw=-1;
+static int hf_vlr_hd_mid=-1;
+static int hf_vlr_hd_sid=-1;
+static int hf_vlr_hd_len=-1;
+static int hf_vlr_dt_mid=-1;
+static int hf_vlr_dt_data=-1;
+static int hf_vlr_dt_len=-1;
 static int ett_vlr=-1;
 
 #define FRAME_HEADER_LEN 11
@@ -29,20 +39,42 @@ dissect_vlr_message(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree _U_,
     proto_item *ti = proto_tree_add_item(tree, proto_vlr, tvb, 0, -1, ENC_NA);
     proto_tree *foo_tree = proto_item_add_subtree(ti, ett_vlr);
     uint8_t type;
-    proto_tree_add_item(foo_tree, hf_vlr_pdu_type, tvb, 0, 1, ENC_BIG_ENDIAN);
+    proto_tree_add_item(foo_tree, hf_vlr_pdu_type, tvb, 0, 1, ENC_LITTLE_ENDIAN);
 
     type = tvb_get_guint8(tvb, 0);
     if (type == HANDSHAKE) {
-        col_add_str(pinfo->cinfo, COL_INFO, "HandShake ");
+        col_append_str(pinfo->cinfo, COL_INFO, "HandShake ");
         proto_tree_add_item(foo_tree, hf_vlr_hs_magic, tvb, 1, 7, ENC_UTF_8);
         proto_tree_add_item(foo_tree, hf_vlr_hs_vers, tvb, 8, 12, ENC_LITTLE_ENDIAN);
     }
     else if (type == INIT) {
-        col_add_str(pinfo->cinfo, COL_INFO, "Init ");
+        col_append_str(pinfo->cinfo, COL_INFO, "Init ");
         proto_tree_add_item(foo_tree, hf_vlr_in_pid, tvb, 1, 16, ENC_SEP_SPACE);
         proto_tree_add_item(foo_tree, hf_vlr_in_secret, tvb, 17, 16, ENC_SEP_SPACE);
     }
-    /* TODO: implement your dissecting code */
+    else if (type == OPEN_STREAM) {
+        proto_tree_add_item(foo_tree, hf_vlr_op_sid, tvb, 1, 8, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(foo_tree, hf_vlr_op_pri, tvb, 9, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(foo_tree, hf_vlr_op_prom, tvb, 10, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(foo_tree, hf_vlr_op_bandw, tvb, 11, 8, ENC_LITTLE_ENDIAN);
+        col_append_fstr(pinfo->cinfo, COL_INFO, "Open S%d P%d ", (int)(tvb_get_letoh64(tvb, 1)), tvb_get_guint8(tvb, 9));
+    }
+    else if (type == DATA_HEADER) {
+        proto_tree_add_item(foo_tree, hf_vlr_hd_mid, tvb, 1, 8, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(foo_tree, hf_vlr_hd_sid, tvb, 9, 8, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(foo_tree, hf_vlr_hd_len, tvb, 17, 8, ENC_LITTLE_ENDIAN);
+        col_append_fstr(pinfo->cinfo, COL_INFO, "DHdr S%d L%d ", (int)(tvb_get_letoh64(tvb, 9)), 
+            (int)(tvb_get_letoh64(tvb, 17)));
+    }
+    else if (type == DATA) {
+        int len = tvb_get_letohis(tvb, 9);
+        proto_tree_add_item(foo_tree, hf_vlr_dt_mid, tvb, 1, 8, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(foo_tree, hf_vlr_dt_len, tvb, 9, 2, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(foo_tree, hf_vlr_dt_data, tvb, 11, len, ENC_LITTLE_ENDIAN);
+    }
+    else {
+        col_append_str(pinfo->cinfo, COL_INFO, "Unknown ");
+    }
     return tvb_captured_length(tvb);
 }
 
@@ -106,37 +138,79 @@ proto_register_vlr(void)
     // Init
         { &hf_vlr_in_pid,
             { "Pid", "veloren.init.pid",
-            FT_BYTES, BASE_NONE, // SPACE?
+            FT_BYTES, ENC_SEP_SPACE,
             NULL, 0x0,
             NULL, HFILL }
         },
         { &hf_vlr_in_secret,
             { "Secret", "veloren.init.secret",
-            FT_BYTES, BASE_NONE,
+            FT_BYTES, ENC_SEP_SPACE,
             NULL, 0x0,
             NULL, HFILL }
         },
-#if 0
-    -- Init
-    pid = ProtoField.bytes("veloren.init.pid", "Pid", base.SPACE),
-    secret = ProtoField.bytes ("veloren.init.secret", "Secret", base.SPACE),
-
-    -- Open
-    stream_id = ProtoField.uint64 ("veloren.open.sid", "SId", base.DEC),
-    prio = ProtoField.uint8 ("veloren.open.prio", "Prio", base.DEC),
-    promises = ProtoField.uint8 ("veloren.open.promises", "Promises", base.HEX),
-    bandwidth = ProtoField.uint64 ("veloren.open.bandwidth", "Guaranteed Bandwidth", base.DEC),
-
-    -- Header
-    mid = ProtoField.uint64 ("veloren.hdr.mid", "MId", base.DEC),
-    sid = ProtoField.uint64 ("veloren.hdr.sid", "SId", base.DEC),
-    len = ProtoField.uint64 ("veloren.hdr.length", "Length", base.DEC),
-
-    -- Data
-    mid2 = ProtoField.uint64 ("veloren.data.mid", "MId", base.DEC),
-    len2 = ProtoField.uint16 ("veloren.data.len", "Length", base.DEC),
-    data = ProtoField.bytes ("veloren.data.data", "Data", base.SPACE),    
-#endif
+    // Open
+        { &hf_vlr_op_sid,
+            { "StreamId", "veloren.open.sid",
+            FT_UINT64, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_vlr_op_pri,
+            { "Priority", "veloren.open.prio",
+            FT_UINT8, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_vlr_op_prom,
+            { "Promises", "veloren.open.promises",
+            FT_UINT8, BASE_HEX,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_vlr_op_bandw,
+            { "Bandwidth", "veloren.open.bandw",
+            FT_UINT64, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+    // Header
+        { &hf_vlr_hd_mid,
+            { "MessageId", "veloren.dhdr.mid",
+            FT_UINT64, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_vlr_hd_sid,
+            { "StreamId", "veloren.dhdr.sid",
+            FT_UINT64, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_vlr_hd_len,
+            { "Length", "veloren.dhdr.len",
+            FT_UINT64, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+    // Data
+        { &hf_vlr_dt_mid,
+            { "MessageId", "veloren.data.mid",
+            FT_UINT64, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_vlr_dt_len,
+            { "Length", "veloren.data.len",
+            FT_UINT16, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_vlr_dt_data,
+            { "Data", "veloren.data.data",
+            FT_BYTES, ENC_SEP_SPACE,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
     };
 
     /* Setup protocol subtree array */
