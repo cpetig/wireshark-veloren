@@ -14,8 +14,8 @@
 
 #include "epan/proto.h"
 
-void proto_register_foo(void);
-void proto_reg_handoff_foo(void);
+void proto_register_vlr(void);
+void proto_reg_handoff_vlr(void);
 
 WS_DLL_PUBLIC_DEF const gchar plugin_version[] = PLUGIN_VERSION;
 WS_DLL_PUBLIC_DEF const int plugin_want_major = WIRESHARK_VERSION_MAJOR;
@@ -27,7 +27,7 @@ void plugin_register(void)
 {
     static proto_plugin plug_foo;
 
-    plug_foo.register_protoinfo = proto_register_foo;
-    plug_foo.register_handoff = proto_reg_handoff_foo;
+    plug_foo.register_protoinfo = proto_register_vlr;
+    plug_foo.register_handoff = proto_reg_handoff_vlr;
     proto_register_plugin(&plug_foo);
 }

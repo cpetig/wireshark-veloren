@@ -4,8 +4,10 @@
 
 #define VELOREN_PORT 14004
 
-static int proto_vlr;
+static int proto_vlr=-1;
 static dissector_handle_t vlr_handle;
+static int hf_vlr_pdu_type=-1;
+static int ett_vlr=-1;
 
 #define FRAME_HEADER_LEN 11
 
@@ -20,6 +22,9 @@ static dissector_handle_t vlr_handle;
 static int
 dissect_vlr_message(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree _U_, void *data _U_)
 {
+    proto_item *ti = proto_tree_add_item(tree, proto_vlr, tvb, 0, -1, ENC_NA);
+    proto_tree *foo_tree = proto_item_add_subtree(ti, ett_vlr);
+    proto_tree_add_item(foo_tree, hf_vlr_pdu_type, tvb, 0, 1, ENC_BIG_ENDIAN);
     /* TODO: implement your dissecting code */
     return tvb_captured_length(tvb);
 }
@@ -55,11 +60,55 @@ dissect_vlr(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_, void *data 
 void
 proto_register_vlr(void)
 {
+//    type   = ProtoField.uint8 ("veloren.type", "Type", base.DEC, msgtype_valstr),
+    static hf_register_info hf[] = {
+        { &hf_vlr_pdu_type,
+            { "Type", "veloren.type",
+            FT_UINT8, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        }
+    };
+
+    /* Setup protocol subtree array */
+    static int *ett[] = {
+        &ett_vlr
+    };
+
     proto_vlr = proto_register_protocol (
         "Veloren Protocol", /* name        */
         "VLR",          /* short name  */
         "vlr"           /* filter_name */
         );
+
+    proto_register_field_array(proto_vlr, hf, array_length(hf));
+    proto_register_subtree_array(ett, array_length(ett));
+
+#if 0
+    -- Handshake
+    magic = ProtoField.new ("veloren.handshake.magic", "Magic", ftypes.STRING),
+    version = ProtoField.new ("veloren.handshake.version", "Version", ftypes.NONE),
+
+    -- Init
+    pid = ProtoField.bytes("veloren.init.pid", "Pid", base.SPACE),
+    secret = ProtoField.bytes ("veloren.init.secret", "Secret", base.SPACE),
+
+    -- Open
+    stream_id = ProtoField.uint64 ("veloren.open.sid", "SId", base.DEC),
+    prio = ProtoField.uint8 ("veloren.open.prio", "Prio", base.DEC),
+    promises = ProtoField.uint8 ("veloren.open.promises", "Promises", base.HEX),
+    bandwidth = ProtoField.uint64 ("veloren.open.bandwidth", "Guaranteed Bandwidth", base.DEC),
+
+    -- Header
+    mid = ProtoField.uint64 ("veloren.hdr.mid", "MId", base.DEC),
+    sid = ProtoField.uint64 ("veloren.hdr.sid", "SId", base.DEC),
+    len = ProtoField.uint64 ("veloren.hdr.length", "Length", base.DEC),
+
+    -- Data
+    mid2 = ProtoField.uint64 ("veloren.data.mid", "MId", base.DEC),
+    len2 = ProtoField.uint16 ("veloren.data.len", "Length", base.DEC),
+    data = ProtoField.bytes ("veloren.data.data", "Data", base.SPACE),    
+#endif
 }
 
 void
