@@ -7,6 +7,8 @@
 static int proto_vlr=-1;
 static dissector_handle_t vlr_handle;
 static int hf_vlr_pdu_type=-1;
+static int hf_vlr_hs_magic=-1;
+static int hf_vlr_hs_vers=-1;
 static int ett_vlr=-1;
 
 #define FRAME_HEADER_LEN 11
@@ -24,7 +26,14 @@ dissect_vlr_message(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree _U_,
 {
     proto_item *ti = proto_tree_add_item(tree, proto_vlr, tvb, 0, -1, ENC_NA);
     proto_tree *foo_tree = proto_item_add_subtree(ti, ett_vlr);
+    uint8_t type;
     proto_tree_add_item(foo_tree, hf_vlr_pdu_type, tvb, 0, 1, ENC_BIG_ENDIAN);
+
+    type = tvb_get_guint8(tvb, 0);
+    if (type == HANDSHAKE) {
+        proto_tree_add_item(foo_tree, hf_vlr_hs_magic, tvb, 1, 7, ENC_UTF_8);
+        proto_tree_add_item(foo_tree, hf_vlr_hs_vers, tvb, 8, 12, ENC_LITTLE_ENDIAN);
+    }
     /* TODO: implement your dissecting code */
     return tvb_captured_length(tvb);
 }
@@ -60,35 +69,27 @@ dissect_vlr(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_, void *data 
 void
 proto_register_vlr(void)
 {
-//    type   = ProtoField.uint8 ("veloren.type", "Type", base.DEC, msgtype_valstr),
     static hf_register_info hf[] = {
         { &hf_vlr_pdu_type,
             { "Type", "veloren.type",
             FT_UINT8, BASE_DEC,
             NULL, 0x0,
             NULL, HFILL }
-        }
-    };
-
-    /* Setup protocol subtree array */
-    static int *ett[] = {
-        &ett_vlr
-    };
-
-    proto_vlr = proto_register_protocol (
-        "Veloren Protocol", /* name        */
-        "VLR",          /* short name  */
-        "vlr"           /* filter_name */
-        );
-
-    proto_register_field_array(proto_vlr, hf, array_length(hf));
-    proto_register_subtree_array(ett, array_length(ett));
-
+        },
+    // Handshake
+        { &hf_vlr_hs_magic,
+            { "Magic", "veloren.handshake.magic",
+            FT_STRINGZPAD, BASE_NONE,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_vlr_hs_vers,
+            { "Version", "veloren.handshake.version",
+            FT_NONE, BASE_NONE,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
 #if 0
-    -- Handshake
-    magic = ProtoField.new ("veloren.handshake.magic", "Magic", ftypes.STRING),
-    version = ProtoField.new ("veloren.handshake.version", "Version", ftypes.NONE),
-
     -- Init
     pid = ProtoField.bytes("veloren.init.pid", "Pid", base.SPACE),
     secret = ProtoField.bytes ("veloren.init.secret", "Secret", base.SPACE),
@@ -109,6 +110,22 @@ proto_register_vlr(void)
     len2 = ProtoField.uint16 ("veloren.data.len", "Length", base.DEC),
     data = ProtoField.bytes ("veloren.data.data", "Data", base.SPACE),    
 #endif
+    };
+
+    /* Setup protocol subtree array */
+    static int *ett[] = {
+        &ett_vlr
+    };
+
+    proto_vlr = proto_register_protocol (
+        "Veloren Protocol", /* name        */
+        "VLR",          /* short name  */
+        "vlr"           /* filter_name */
+        );
+
+    proto_register_field_array(proto_vlr, hf, array_length(hf));
+    proto_register_subtree_array(ett, array_length(ett));
+
 }
 
 void
