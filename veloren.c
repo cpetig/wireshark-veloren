@@ -9,6 +9,8 @@ static dissector_handle_t vlr_handle;
 static int hf_vlr_pdu_type=-1;
 static int hf_vlr_hs_magic=-1;
 static int hf_vlr_hs_vers=-1;
+static int hf_vlr_in_pid=-1;
+static int hf_vlr_in_secret=-1;
 static int ett_vlr=-1;
 
 #define FRAME_HEADER_LEN 11
@@ -31,8 +33,14 @@ dissect_vlr_message(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree _U_,
 
     type = tvb_get_guint8(tvb, 0);
     if (type == HANDSHAKE) {
+        col_add_str(pinfo->cinfo, COL_INFO, "HandShake ");
         proto_tree_add_item(foo_tree, hf_vlr_hs_magic, tvb, 1, 7, ENC_UTF_8);
         proto_tree_add_item(foo_tree, hf_vlr_hs_vers, tvb, 8, 12, ENC_LITTLE_ENDIAN);
+    }
+    else if (type == INIT) {
+        col_add_str(pinfo->cinfo, COL_INFO, "Init ");
+        proto_tree_add_item(foo_tree, hf_vlr_in_pid, tvb, 1, 16, ENC_SEP_SPACE);
+        proto_tree_add_item(foo_tree, hf_vlr_in_secret, tvb, 17, 16, ENC_SEP_SPACE);
     }
     /* TODO: implement your dissecting code */
     return tvb_captured_length(tvb);
@@ -54,13 +62,9 @@ get_vlr_message_len(packet_info *pinfo _U_, tvbuff_t *tvb, int offset, void *dat
 static int
 dissect_vlr(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_, void *data _U_)
 {
-    col_set_str(pinfo->cinfo, COL_PROTOCOL, "VLR");
+    col_set_str(pinfo->cinfo, COL_PROTOCOL, "Veloren");
     /* Clear the info column */
     col_clear(pinfo->cinfo,COL_INFO);
-#if 0
-
-    proto_item *ti = proto_tree_add_item(tree, proto_vlr, tvb, 0, -1, ENC_LITTLE_ENDIAN);
-#endif
     tcp_dissect_pdus(tvb, pinfo, tree, true, FRAME_HEADER_LEN,
                      get_vlr_message_len, dissect_vlr_message, data);
     return tvb_captured_length(tvb);
@@ -96,6 +100,19 @@ proto_register_vlr(void)
         { &hf_vlr_hs_vers,
             { "Version", "veloren.handshake.version",
             FT_NONE, BASE_NONE,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+    // Init
+        { &hf_vlr_in_pid,
+            { "Pid", "veloren.init.pid",
+            FT_BYTES, BASE_NONE, // SPACE?
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_vlr_in_secret,
+            { "Secret", "veloren.init.secret",
+            FT_BYTES, BASE_NONE,
             NULL, 0x0,
             NULL, HFILL }
         },
