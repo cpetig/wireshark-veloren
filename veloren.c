@@ -69,11 +69,21 @@ dissect_vlr(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_, void *data 
 void
 proto_register_vlr(void)
 {
+    static const value_string typenames[] = {
+        { HANDSHAKE, "Handshake" },
+        { INIT, "Init" },
+        { OPEN_STREAM, "Open stream" },
+        { DATA_HEADER, "Data header" },
+        { DATA, "Data" },
+        { RAW, "Raw" },
+        { 0, NULL },
+    };
+
     static hf_register_info hf[] = {
         { &hf_vlr_pdu_type,
             { "Type", "veloren.type",
             FT_UINT8, BASE_DEC,
-            NULL, 0x0,
+            VALS(typenames), 0x0,
             NULL, HFILL }
         },
     // Handshake
