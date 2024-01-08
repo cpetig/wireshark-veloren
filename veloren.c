@@ -110,8 +110,9 @@ dissect_vlr_message(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree _U_,
                 if (active_streams[i].stored==active_streams[i].length) {
                     proto_item* item=NULL;
                     result_handle parsed = NULL;
+                    int from_server = pinfo->srcport == VELOREN_PORT;
                     // handle the data
-                    parsed = ingest_data(active_streams[i].sid, 1, active_streams[i].storage, active_streams[i].stored);
+                    parsed = ingest_data(active_streams[i].sid, from_server, active_streams[i].storage, active_streams[i].stored);
                     item = proto_tree_add_item(foo_tree, hf_vlr_dt_meaning, tvb, 11, len, ENC_NA);
                     proto_item_append_text(item, ": %s", get_long_text(parsed));
                     col_append_str(pinfo->cinfo, COL_INFO, get_short_representation(parsed));
