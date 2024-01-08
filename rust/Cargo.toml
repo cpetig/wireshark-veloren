@@ -8,3 +8,7 @@ edition = "2021"
 [dependencies]
 bincode = { version = "1.3.3" } 
 lz-fear = { version = "0.1.1" }
+veloren-common-net = { version = "0.10.0", path = "../veloren/common/net" }
+
+[lib]
+crate-type = ["staticlib"]
