@@ -33,7 +33,7 @@ pub fn ingest_data(
             },
             Err(e) => return_error(e),
         },
-        2 | 4 | 5 => {
+        0 | 2 | 3 | 4 => {
             let mut uncompressed_data = Vec::with_capacity(len as usize * 2);
             match lz_fear::raw::decompress_raw(slice, &[0; 0], &mut uncompressed_data, usize::MAX) {
                 Ok(_) => {
@@ -56,6 +56,26 @@ pub fn ingest_data(
                     }
                 }
                 Err(e) => return_error(e),
+            }
+        }
+        5 => {
+            // uncompressed
+            if from_server != 0 {
+                match bincode::deserialize::<ServerGeneral>(slice) {
+                    Ok(msg) => PacketInfo {
+                        short_repr: CString::default(),
+                        long_text: CString::new(format!("{msg:?}")).unwrap(),
+                    },
+                    Err(e) => return_error(e),
+                }
+            } else {
+                match bincode::deserialize::<ClientGeneral>(slice) {
+                    Ok(msg) => PacketInfo {
+                        short_repr: CString::default(),
+                        long_text: CString::new(format!("{msg:?}")).unwrap(),
+                    },
+                    Err(e) => return_error(e),
+                }
             }
         }
         _ => PacketInfo {
