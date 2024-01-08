@@ -2,6 +2,8 @@
 
 use std::ffi::CString;
 
+use veloren_common_net::msg::{ClientGeneral, PingMsg, ServerGeneral};
+
 struct PacketInfo {
     short_repr: CString,
     long_text: CString,
@@ -16,9 +18,50 @@ pub fn ingest_data(
     data: *const ::std::os::raw::c_uchar,
     len: ::std::os::raw::c_uint,
 ) -> ResultHandle {
-    let res = PacketInfo {
-        short_repr: CString::new("Short".to_string()).unwrap(),
-        long_text: CString::new("Long representation".to_string()).unwrap(),
+    fn return_error<E: core::fmt::Debug>(e: E) -> PacketInfo {
+        PacketInfo {
+            short_repr: CString::default(),
+            long_text: CString::new(format!("{e:?}")).unwrap(),
+        }
+    }
+    let slice = unsafe { std::slice::from_raw_parts(data, len as usize) };
+    let res = match stream {
+        1 => match bincode::deserialize::<PingMsg>(slice) {
+            Ok(msg) => PacketInfo {
+                short_repr: CString::default(),
+                long_text: CString::new(format!("{msg:?}")).unwrap(),
+            },
+            Err(e) => return_error(e),
+        },
+        2 | 4 | 5 => {
+            let mut uncompressed_data = Vec::with_capacity(len as usize * 2);
+            match lz_fear::raw::decompress_raw(slice, &[0; 0], &mut uncompressed_data, usize::MAX) {
+                Ok(_) => {
+                    if from_server != 0 {
+                        match bincode::deserialize::<ServerGeneral>(uncompressed_data.as_slice()) {
+                            Ok(msg) => PacketInfo {
+                                short_repr: CString::default(),
+                                long_text: CString::new(format!("{msg:?}")).unwrap(),
+                            },
+                            Err(e) => return_error(e),
+                        }
+                    } else {
+                        match bincode::deserialize::<ClientGeneral>(uncompressed_data.as_slice()) {
+                            Ok(msg) => PacketInfo {
+                                short_repr: CString::default(),
+                                long_text: CString::new(format!("{msg:?}")).unwrap(),
+                            },
+                            Err(e) => return_error(e),
+                        }
+                    }
+                }
+                Err(e) => return_error(e),
+            }
+        }
+        _ => PacketInfo {
+            short_repr: CString::default(),
+            long_text: CString::new("Not yet implemented".to_string()).unwrap(),
+        },
     };
     Box::into_raw(Box::new(res)).cast()
 }
