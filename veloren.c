@@ -1,6 +1,7 @@
 #include "config.h"
 #include <epan/packet.h>
 #include <epan/dissectors/packet-tcp.h>
+#include <veloren_dissector.h>
 
 #define VELOREN_PORT 14004
 
@@ -21,6 +22,7 @@ static int hf_vlr_hd_len=-1;
 static int hf_vlr_dt_mid=-1;
 static int hf_vlr_dt_data=-1;
 static int hf_vlr_dt_len=-1;
+static int hf_vlr_dt_meaning=-1;
 static int ett_vlr=-1;
 
 #define FRAME_HEADER_LEN 11
@@ -31,6 +33,17 @@ static int ett_vlr=-1;
 #define DATA_HEADER 6
 #define DATA 7
 #define RAW 8
+
+struct active_stream {
+    uint64_t mid; // key
+    uint64_t sid;
+    uint64_t length;
+    uint64_t stored;
+    uint8_t *storage;
+};
+
+#define NUMBER_ACTIVE_STREAMS 8
+static struct active_stream active_streams[NUMBER_ACTIVE_STREAMS] = {{0},{0},{0},{0}, {0},{0},{0},{0}};
 
 /* This method dissects fully reassembled messages */
 static int
@@ -43,9 +56,11 @@ dissect_vlr_message(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree _U_,
 
     type = tvb_get_guint8(tvb, 0);
     if (type == HANDSHAKE) {
+        proto_item* item=NULL;
         col_append_str(pinfo->cinfo, COL_INFO, "HandShake ");
         proto_tree_add_item(foo_tree, hf_vlr_hs_magic, tvb, 1, 7, ENC_UTF_8);
-        proto_tree_add_item(foo_tree, hf_vlr_hs_vers, tvb, 8, 12, ENC_LITTLE_ENDIAN);
+        item = proto_tree_add_item(foo_tree, hf_vlr_hs_vers, tvb, 8, 12, ENC_LITTLE_ENDIAN);
+        proto_item_append_text(item, ": %u.%u.%u", tvb_get_letohl(tvb, 8),tvb_get_letohl(tvb, 12),tvb_get_letohl(tvb, 16));
     }
     else if (type == INIT) {
         col_append_str(pinfo->cinfo, COL_INFO, "Init ");
@@ -60,17 +75,57 @@ dissect_vlr_message(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree _U_,
         col_append_fstr(pinfo->cinfo, COL_INFO, "Open S%d P%d ", (int)(tvb_get_letoh64(tvb, 1)), tvb_get_guint8(tvb, 9));
     }
     else if (type == DATA_HEADER) {
+        uint32_t i=0;
         proto_tree_add_item(foo_tree, hf_vlr_hd_mid, tvb, 1, 8, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(foo_tree, hf_vlr_hd_sid, tvb, 9, 8, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(foo_tree, hf_vlr_hd_len, tvb, 17, 8, ENC_LITTLE_ENDIAN);
         col_append_fstr(pinfo->cinfo, COL_INFO, "DHdr S%d L%d ", (int)(tvb_get_letoh64(tvb, 9)), 
             (int)(tvb_get_letoh64(tvb, 17)));
+        for (i=0;i<NUMBER_ACTIVE_STREAMS;++i) {
+            if (active_streams[i].storage==NULL) {
+                active_streams[i].mid = tvb_get_letoh64(tvb, 1);
+                active_streams[i].sid = tvb_get_letoh64(tvb, 9);
+                active_streams[i].length = tvb_get_letoh64(tvb, 17);
+                active_streams[i].stored = 0;
+                if (active_streams[i].length<20*1024*1024)
+                    active_streams[i].storage = malloc(active_streams[i].length);
+                break;
+            }
+        }
     }
     else if (type == DATA) {
         int len = tvb_get_letohis(tvb, 9);
+        uint32_t i=0;
         proto_tree_add_item(foo_tree, hf_vlr_dt_mid, tvb, 1, 8, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(foo_tree, hf_vlr_dt_len, tvb, 9, 2, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(foo_tree, hf_vlr_dt_data, tvb, 11, len, ENC_LITTLE_ENDIAN);
+        for (i=0;i<NUMBER_ACTIVE_STREAMS;++i) {
+            if (active_streams[i].mid == tvb_get_letoh64(tvb, 1)) {
+                // limit
+                if (active_streams[i].stored + len > active_streams[i].length) {
+                    len = active_streams[i].length-active_streams[i].stored;
+                }
+                tvb_memcpy(tvb, active_streams[i].storage+active_streams[i].stored, 13, len);
+                active_streams[i].stored += len;
+                if (active_streams[i].stored==active_streams[i].length) {
+                    proto_item* item=NULL;
+                    result_handle parsed = NULL;
+                    // handle the data
+                    parsed = ingest_data(active_streams[i].sid, 1, active_streams[i].storage, active_streams[i].stored);
+                    item = proto_tree_add_item(foo_tree, hf_vlr_dt_meaning, tvb, 11, len, ENC_NA);
+                    proto_item_append_text(item, ": %s", get_long_text(parsed));
+                    col_append_str(pinfo->cinfo, COL_INFO, get_short_representation(parsed));
+                    free_handle(parsed);
+                    // free
+                    free(active_streams[i].storage);
+                    active_streams[i].storage = NULL;
+                    active_streams[i].stored = 0;
+                    active_streams[i].mid = 0;
+                    active_streams[i].sid = 0;
+                    active_streams[i].length = 0;
+                }
+            }
+        }
     }
     else {
         col_append_str(pinfo->cinfo, COL_INFO, "Unknown ");
@@ -208,6 +263,12 @@ proto_register_vlr(void)
         { &hf_vlr_dt_data,
             { "Data", "veloren.data.data",
             FT_BYTES, ENC_SEP_SPACE,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_vlr_dt_meaning,
+            { "Parsed", "veloren.data.parsed",
+            FT_NONE, BASE_NONE,
             NULL, 0x0,
             NULL, HFILL }
         },
