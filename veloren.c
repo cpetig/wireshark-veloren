@@ -100,12 +100,12 @@ dissect_vlr_message(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree _U_,
         proto_tree_add_item(foo_tree, hf_vlr_dt_len, tvb, 9, 2, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(foo_tree, hf_vlr_dt_data, tvb, 11, len, ENC_LITTLE_ENDIAN);
         for (i=0;i<NUMBER_ACTIVE_STREAMS;++i) {
-            if (active_streams[i].mid == tvb_get_letoh64(tvb, 1)) {
+            if (active_streams[i].mid == tvb_get_letoh64(tvb, 1) && active_streams[i].storage!=NULL) {
                 // limit
                 if (active_streams[i].stored + len > active_streams[i].length) {
                     len = active_streams[i].length-active_streams[i].stored;
                 }
-                tvb_memcpy(tvb, active_streams[i].storage+active_streams[i].stored, 13, len);
+                tvb_memcpy(tvb, active_streams[i].storage+active_streams[i].stored, 11, len);
                 active_streams[i].stored += len;
                 if (active_streams[i].stored==active_streams[i].length) {
                     proto_item* item=NULL;
@@ -124,6 +124,7 @@ dissect_vlr_message(tvbuff_t *tvb, packet_info *pinfo _U_, proto_tree *tree _U_,
                     active_streams[i].sid = 0;
                     active_streams[i].length = 0;
                 }
+                break;
             }
         }
     }
