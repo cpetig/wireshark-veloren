@@ -1380,6 +1380,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "lz-fear",
+ "veloren-common",
  "veloren-common-net",
 ]
 
