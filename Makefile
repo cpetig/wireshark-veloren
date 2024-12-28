@@ -12,3 +12,6 @@ veloren_ds.so: plugin.c veloren.c
 
 install: veloren_ds.so
 	cp $^ $(HOME)/.local/lib/wireshark/plugins/$(WIRESHARK_VERSION)/epan
+
+uninstall:
+	rm $(HOME)/.local/lib/wireshark/plugins/*/epan/veloren_ds.so
