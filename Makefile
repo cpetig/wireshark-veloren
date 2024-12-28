@@ -18,6 +18,10 @@ install: all
 uninstall:
 	rm $(HOME)/.local/lib/wireshark/plugins/*/epan/veloren_ds.so
 
+clean:
+	rm -rf rust/target
+	rm veloren_ds.so
+
 rust/target/debug/libveloren_dissector.a:
 	git submodule update --init --recursive
 	cd rust && cargo build
